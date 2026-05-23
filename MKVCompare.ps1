@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: MKVCompare.ps1
-# VERSION: 2026.05.22__12.02.32
+# VERSION: 2026.05.22__21.12.35
 # TARGET: PowerShell 7.6.1 LTS
 #
 # Copyright (C) 2026 pwshAgyjkcrg761
@@ -97,15 +97,22 @@ function Invoke-FolderComparison {
     )
     $script:TotalCheckedPairs++
     
-    $SourceCount = (Get-ChildItem -LiteralPath $SourceDir.FullName -Filter "*.mkv" -File).Count
-    $UpdatedCount = (Get-ChildItem -LiteralPath $UpdatedDir.FullName -Filter "*.mkv" -File).Count
+    $SourceFiles = @(Get-ChildItem -LiteralPath $SourceDir.FullName -Filter "*.mkv" -File | Select-Object -ExpandProperty Name)
+    $UpdatedFiles = @(Get-ChildItem -LiteralPath $UpdatedDir.FullName -Filter "*.mkv" -File | Select-Object -ExpandProperty Name)
 
-    if ($SourceCount -ne $UpdatedCount) {
+    # Correctly filter the SideIndicator property from the output objects
+    $Comparisons = Compare-Object -ReferenceObject $SourceFiles -DifferenceObject $UpdatedFiles
+    
+    $MissingInUpdated = $Comparisons | Where-Object { $_.SideIndicator -eq '<=' } | Select-Object -ExpandProperty InputObject
+    $MissingInSource  = $Comparisons | Where-Object { $_.SideIndicator -eq '=>' } | Select-Object -ExpandProperty InputObject
+
+    if ($MissingInUpdated -or $MissingInSource) {
         $script:Mismatches.Add([PSCustomObject]@{
-            FolderName   = $SourceDir.Name
-            SourceCount  = $SourceCount
-            UpdatedCount = $UpdatedCount
-            Difference   = [Math]::Abs($SourceCount - $UpdatedCount)
+            FolderName       = $SourceDir.Name
+            SourceCount      = $SourceFiles.Count
+            UpdatedCount     = $UpdatedFiles.Count
+            MissingInUpdated = $MissingInUpdated
+            MissingInSource  = $MissingInSource
         })
     }
 }
@@ -210,12 +217,21 @@ if ($TotalCheckedPairs -gt 0) {
         foreach ($Item in $SortedMismatches) {
             Write-Host "[-] Directory: " -NoNewline -ForegroundColor Yellow
             Write-Host $Item.FolderName -ForegroundColor White
-            Write-Host "    -> Base Folder:    " -NoNewline -ForegroundColor Gray
-            Write-Host "$($Item.SourceCount) MKV(s)" -ForegroundColor Cyan
-            Write-Host "    -> Updated Folder: " -NoNewline -ForegroundColor Gray
-            Write-Host "$($Item.UpdatedCount) MKV(s)" -ForegroundColor Cyan
-            Write-Host "    -> Discrepancy:   " -NoNewline -ForegroundColor Gray
-            Write-Host "$($Item.Difference) file(s) missing" -ForegroundColor Red
+            Write-Host "    -> Base Folder Total:    $($Item.SourceCount) MKV(s)" -ForegroundColor Gray
+            Write-Host "    -> Updated Folder Total: $($Item.UpdatedCount) MKV(s)" -ForegroundColor Gray
+            
+            if ($Item.MissingInUpdated) {
+                Write-Host "    -> Missing from Updated folder:" -ForegroundColor Red
+                foreach ($File in $Item.MissingInUpdated) {
+                    Write-Host "       [x] $File" -ForegroundColor DarkRed
+                }
+            }
+            if ($Item.MissingInSource) {
+                Write-Host "    -> Extra in Updated folder (Missing from Base):" -ForegroundColor Magenta
+                foreach ($File in $Item.MissingInSource) {
+                    Write-Host "       [+] $File" -ForegroundColor DarkMagenta
+                }
+            }
             Write-Host ""
         }
     }
