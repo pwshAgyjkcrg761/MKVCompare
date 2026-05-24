@@ -1,6 +1,6 @@
 # ==============================================================================
 # SCRIPT: MKVCompare.ps1
-# VERSION: 2026.05.22__21.12.35
+# VERSION: 2026.05.23__23.08.15
 # TARGET: PowerShell 7.6.1 LTS
 #
 # Copyright (C) 2026 pwshAgyjkcrg761
@@ -36,23 +36,10 @@
     Outputs all data strictly matching native Windows Explorer alphanumeric sort order.
 #>
 
-$Title = "MKV Folder Sync Auditor"
+$Title = "MKV Compare"
 [Console]::Title = $Title
 
-# 1. Beginning Prompt
-Clear-Host
-Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host "         $Title initialized" -ForegroundColor Cyan
-Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host ""
-Read-Host "Press [Enter] to begin comparing MKV counts"
-Write-Host ""
-
-$Mismatches = [System.Collections.Generic.List[PSObject]]::new()
-$UnpairedFolders = [System.Collections.Generic.List[PSObject]]::new()
-$TotalCheckedPairs = 0
-
-# C-Sharp signature to hook into the native Windows StrCmpLogicalW sorting algorithm
+# --- Logic Setup: Windows Natural Sort ---
 $WindowsSortCode = @'
 using System;
 using System.Runtime.InteropServices;
@@ -67,27 +54,71 @@ public class WindowsNaturalSort : IComparer<string> {
     }
 }
 '@
-Add-Type -TypeDefinition $WindowsSortCode
+if (-not ([System.Management.Automation.PSTypeName]'WindowsNaturalSort').Type) {
+    Add-Type -TypeDefinition $WindowsSortCode
+}
 
 # Helper function to sort objects exactly like Windows File Explorer
 function Sort-AsWindows {
     param(
         [Parameter(Mandatory=$true)]
-        [System.Collections.Generic.List[PSObject]]$InputList,
+        $InputList,
         [Parameter(Mandatory=$true)]
         [string]$PropertyName
     )
     if ($InputList.Count -le 1) { return $InputList }
-    
     $Sorter = [WindowsNaturalSort]::new()
     $SortedList = [System.Collections.Generic.List[PSObject]]::new($InputList)
-    
     $SortedList.Sort([System.Comparison[PSObject]] {
         param($a, $b)
         return $Sorter.Compare($a.$PropertyName, $b.$PropertyName)
     })
     return $SortedList
 }
+
+# 1. Gather Arguments
+$RawItems = [System.Collections.Generic.List[PSObject]]::new()
+if ($args.Count -gt 0) {
+    foreach ($arg in $args) {
+        if (Test-Path -Path $arg -PathType Container) {
+            $RawItems.Add((Get-Item -LiteralPath $arg))
+        }
+    }
+}
+
+# 2. Force Natural Sort (Fixes the "Right-Click First" Explorer behavior)
+$ValidPassedPaths = if ($RawItems.Count -gt 1) {
+    $Sorter = [WindowsNaturalSort]::new()
+    $RawItems.Sort([System.Comparison[PSObject]] {
+        param($a, $b) return $Sorter.Compare($a.FullName, $b.FullName)
+    })
+    $RawItems
+} else {
+    $RawItems
+}
+
+# 3. Beginning Prompt
+Clear-Host
+Write-Host "====================================================" -ForegroundColor Cyan
+Write-Host "         $Title initialized" -ForegroundColor Cyan
+Write-Host "====================================================" -ForegroundColor Cyan
+Write-Host ""
+
+if ($ValidPassedPaths.Count -gt 0) {
+    Write-Host "Source Folder(s):" -ForegroundColor White
+    foreach ($Path in $ValidPassedPaths) {
+        Write-Host " -> $($Path.FullName)" -ForegroundColor Gray
+    }
+    Write-Host ""
+}
+
+Read-Host "Press [Enter] to begin comparing MKV counts"
+Write-Host ""
+
+$Mismatches = [System.Collections.Generic.List[PSObject]]::new()
+$UnpairedFolders = [System.Collections.Generic.List[PSObject]]::new()
+$TotalCheckedPairs = 0
+
 
 # Helper function to audit a specific pair of directories
 function Invoke-FolderComparison {
@@ -117,15 +148,7 @@ function Invoke-FolderComparison {
     }
 }
 
-# 2. Parse Input Arguments
-$ValidPassedPaths = @()
-if ($args.Count -gt 0) {
-    foreach ($arg in $args) {
-        if (Test-Path -Path $arg -PathType Container) {
-            $ValidPassedPaths += Get-Item -LiteralPath $arg
-        }
-    }
-}
+
 
 # 3. Determine Execution Mode Dynamically
 $ProcessedAsPairs = $false
@@ -203,7 +226,7 @@ if (-not $ProcessedAsPairs) {
 
 # 4. Display Results
 Write-Host "----------------------------------------------------" -ForegroundColor Gray
-Write-Host "Audit Results:" -ForegroundColor White
+Write-Host "Results:" -ForegroundColor White
 Write-Host "----------------------------------------------------"
 
 # Display Mismatches (Sorted with Windows Natural Sort)
@@ -260,7 +283,7 @@ if ($UnpairedFolders.Count -gt 0) {
 # 5. Ending Prompt
 Write-Host ""
 Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host "         Audit processing complete." -ForegroundColor Cyan
+Write-Host "         Processing complete." -ForegroundColor Cyan
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host ""
 Read-Host "Press [Enter] to exit the script"
