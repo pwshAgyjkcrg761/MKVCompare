@@ -1,34 +1,36 @@
-<!--TEMPLATE EXAMPLE
-
-# TEMPLATE_GPL-3.0-or-later_Private
-**A high-fidelity media management and metadata enforcement suite for PowerShell 7.6.1 LTS.**
+# MKVCompare
+**A high-speed directory auditing utility and filename validation suite for PowerShell 7.6.x.**
 
 ---
 
-
 ## Overview
-MKVMetadataAuditor+Fixer is a high-performance automation suite built for media archivists who prioritize metadata integrity and container consistency. Designed to handle the complexities of large-scale libraries, the script acts as both a vigilant auditor and a precision repair tool. It eliminates the manual labor of checking track flags, language tags, and track titles by enforcing a standardized configuration across your collection. By identifying discrepancies in audio and subtitle tracks, it ensures that your media is always configured for your preferred playback experience.
+MKVCompare is a high-performance directory auditing utility designed for media archivists during library updates. It operates by validating that updated media folders perfectly mirror their source counterparts, helping maintain strict library organization and track integrity.
 
-## Technical Logic
-The script employs a dual-engine approach to process files—handling Anime and Western media with specialized audit logic—and utilizes a customizable JSON-based defaults system to resolve metadata errors automatically. It features a robust gatekeeper engine that allows users to exclude specific directories via a switch-enabled (`-ep`) text-based bypass. With direct integration with `mkvpropedit`, the tool provides granular control over MKV headers, allowing for the batch correction of language codes and default/forced track flags without the need for full file remuxing.
+The script logic is divided into two specialized operational modes:
+1. **DIRECT MODE:** Triggered when you drag and drop specific folders or explicitly pass them via parameters. It pairs folders based on the presence of the `_updated` suffix.
+2. **BATCH MODE:** Triggered when running the script within a parent folder. It automatically scans the root directory and pairs every standard folder with its corresponding `_updated*` sibling.
+
+### Startup Display
+The script clears the console and displays the active source paths before beginning its execution. This startup display is automatically suppressed when debugging is active to ensure that the internal telemetry log remains perfectly preserved and readable.
+
+### Pairing Logic
+The script employs a flexible wildcard matching system for updated folders. A base source folder named `ShowTitle` will automatically discover and pair with folders named `ShowTitle_updated`, `ShowTitle_updated-HEVC`, `ShowTitle_updated-v2`, and similar naming variations.
+
+### Comparison Engine
+Unlike simple tools that only perform basic file count checks, this script executes a full filename audit. If the base folder contains `Movie.mkv` and the updated folder contains `Movie-fixed.mkv`, the script will report a mismatch even if the total file counts match. This ensures that hidden variations are caught and track integrity remains intact.
 
 ## Usage Examples
 ```powershell
-# Standard Audit (No Changes)
-.\MKVMetadataAuditor+Fixer.ps1 -Path 'G:\Media\Anime'
+# Batch Audit Current Directory
+.\MKVCompare.ps1
 
-# Automated Fix (JPN Audio / ENG Subs / Honorifics)
-.\MKVMetadataAuditor+Fixer.ps1 -Fix -aud jpn -sub eng -Hon -ovrd -Path 'G:\Media\Anime'
+# Audit Specific Folders (Drag & Drop)
+.\MKVCompare.ps1 -Path 'C:\Media\Show', 'C:\Media\Show_updated'
 
-# Update Video Language (Chinese) & Save to Config
-.\MKVMetadataAuditor+Fixer.ps1 -Fix -vid chi -vidf -ovrd -Path 'G:\Media\Anime'
-
-# Direct Fix (No Backup) with Codec Priority
-.\MKVMetadataAuditor+Fixer.ps1 -Fix -FixNoBackup -sc 'ass,srt' -ovrd -Path 'G:\Media\Anime'
-
-# AVC High 10 Deep Scan Library Sweep (Fast Mode)
-.\MKVMetadataAuditor+Fixer.ps1 -h10p -fast -Path 'G:\Media\Anime'
+# Debug Pairing Logic
+.\MKVCompare.ps1 -DevDebug
 ```
+
 ---
 
 ## Parameter Reference
@@ -36,59 +38,23 @@ The script employs a dual-engine approach to process files—handling Anime and 
 ### Core Flags
 | Flag | Description |
 | :--- | :--- |
-| `-Path <string>` | Defines the target directory for recursive scanning. |
-| `-Fix` | Enables **Write Mode**. Without this, the script runs in read-only audit mode. |
-| `-FixDebug` | Prints the exact `mkvpropedit` command strings before execution and displays subtitle scoring logic—ideal for verifying complex changes. |
-| `-FixNoBackup` | Overwrites metadata directly on source files (disables `_updated` folder). |
-| `-overrideDefaults \| -ovrd` | **Mandatory** when using automation flags to save parameters to the JSON config. |
-
-### Mode & Search Flags
-| Flag | Description |
-| :--- | :--- |
-| `-Western \| -w \| -west \| -WesternMode` | Sets defaults for Western media (English audio/subs). |
-| `-AvcHigh10Search \| -h10p` | **Search Mode:** Scans specifically for AVC High 10 (10-bit) video streams. |
-| `-AvcHigh10SearchDebug \| -h10pDebug` | Enables verbose terminal output during the High 10 search. |
-| `-fast` | Speeds up the High 10 search by skipping extended metadata checks. |
-| `-LogFullPath \| -lfp` | Forces the log to write the full file path instead of just the folder path during a fast AVC High 10 search. Requires -fast. |
-| `-disableRecurse \| -nr` | **No-Recurse:** Disables subfolder scanning; only processes the root path. |
-
-### Track Priorities & Automation
-| Flag | Description |
-| :--- | :--- |
-| `-videoLanguage \| -vid <string>` | Targets the video track language (3-letter ISO code). |
-| `-videoForceUpdate \| -vidf` | **Safety Toggle:** Confirms video language changes on files that otherwise pass audit. |
-| `-audioLanguageUpdate \| -audf` | **Safety Toggle:** Confirms audio language changes on files that otherwise pass audit. |
-| `-audioLanguagePriority \| -aud <string>` | Sets primary audio language (e.g., 'jpn') and sets it as 'Default'. |
-| `-subtitleLanguagePriority \| -sub <string>` | Sets primary subtitle language. Uses weighted scoring for best dialogue track. |
-| `-subtitleCodecPriority \| -sc <string>` | Comma-separated list (e.g., 'ass,srt') to dictate subtitle format preference. |
-| `-Honorifics \| -Hon` | Injects a **+300 score bonus** to tracks labeled 'honorifics' or 'enm'. |
-| `-SubtitleFactorTrackOrder \| -SFTO \| -SubTrackOrder \| -TrackOrder` | Instructs the weighted scoring algorithm to factor in the physical track placement when determining priorities for subtitle selection. |
-| `-FansubGroupPriority \| -fg <string>` | Sets preferred fansub groups for subtitle track prioritization (e.g., `-fg 'commie'`). Pass an empty string (`""`) to clear preferences via CLI. |
-| `-SubtitlesHearingImpaired \| -sdh \| -hi \| -hicc \| -cc` | Prioritizes 'Hearing Impaired' or 'SDH' subtitle tracks (Western Mode). |
-| `-OverrideWesternDefaults \| -ovrdw` | Allows the script to save custom Western mode parameters to the JSON configuration. |
-
-### Advanced & Log Management Flags
-| Flag | Description |
-| :--- | :--- |
-| `-VerifyUpdates \| -V \| -Verify` | Chains an automated second-pass verification audit immediately after fixing to confirm metadata integrity. Requires `-Fix`. |
-| `-help \| -manual` | Displays the internal help manual. |
-| `-DelLog` | Clears all historically accumulated files within the logs directory before starting operations. |
-| `-ClearDefaults \| -clr` | Deletes the saved Anime configuration JSON template to reset rules back to factory conditions. |
-| `-ClearWesternDefaults \| -clrw` | Deletes the custom Western configuration file to purge specialized rules. |
-| `-ClearAllDefaults \| -cla` | Total system purge of both Anime and Western configuration JSON structures. |
-| `-excludePaths \| -ep` | Enables the directory suppression exclusion engine (`MKVMetadataAuditor+Fixer__Excluded-Paths.txt`). |
-| `-Version \| -Ver` | Displays the script's current version number and exits immediately. |
+| `-Path <string[]>` | Defines the target directory or directories. Supports multiple paths. If omitted, the script defaults to the current working directory. Supports folder drag-and-drop. |
+| `-DevDebug \| -Dev \| -DBG` | **Exposing the Black Box:** Exposes the script's internal pairing logic. Prints the full absolute paths of every Base/Updated pair it identifies before starting the comparison, and suppresses the startup console clear to preserve telemetry logs. |
+| `-help \| -manual \| -h` | Displays the built-in internal manual and usage guide. |
 
 ---
 
 ## Dependencies
-* **MKVToolNix:** Required for header probing (`mkvmerge`) and metadata editing (`mkvpropedit`).
-* **MediaInfo:** Required for video profile verification during AVC High 10 searches.
-
-TEMPLATE EXAMPLE-->
+* **PowerShell:** Built with PowerShell 7.6.x. The script utilizes the ternary operator and other modern syntax features not available in Windows PowerShell 5.1.
+* **Windows OS:** Required for native `shlwapi.dll` (Natural Sort) integration to ensure files and folders are evaluated in the same order seen in File Explorer.
 
 ## Support & Maintenance
-**This repository is provided "as-is" for archival purposes.** I am not actively looking for feedback, feature requests, or bug reports. The issue tracker is disabled, and I will not be responding to inquiries regarding setup or usage.
+**This repository is provided "as-is" for archival purposes.** The author is not actively looking for feedback, feature requests, or bug reports. The issue tracker is disabled, and the author will not be responding to inquiries regarding setup or usage.
 
 ## Disclaimer
-*This script modifies MKV file headers and metadata. While designed for safety, always ensure you have backups of your media before running batch operations. The author is not responsible for any accidental data loss or corruption resulting from the use of this tool.*
+*This script automates directory auditing and structural validation. While designed for safety and read-only comparison, always ensure you maintain proper data workflows during library updates. The author is not responsible for any accidental data loss, sorting discrepancies, or script execution conflicts resulting from the use of this tool.*
+
+---
+> **Document Control**
+> *This document is up-to-date with the following version of MKVCompare.*
+> *2026.06.28__15.22.44*
