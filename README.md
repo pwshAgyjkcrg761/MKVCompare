@@ -55,6 +55,6 @@ Unlike simple tools that only perform basic file count checks, this script execu
 *This script automates directory auditing and structural validation. While designed for safety and read-only comparison, always ensure you maintain proper data workflows during library updates. The author is not responsible for any accidental data loss, sorting discrepancies, or script execution conflicts resulting from the use of this tool.*
 
 ---
-> **Document Control**
-> *This document is up-to-date with the following version of MKVCompare.*
-> *2026.06.28__15.22.44*
+> **Document Control**<br>
+> *This document is up-to-date with the following version of MKVCompare.*<br>
+> *2026.07.02__14.27.13*
