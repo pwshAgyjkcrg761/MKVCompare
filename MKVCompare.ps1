@@ -69,7 +69,7 @@ param(
 
 
 # --- GLOBAL VERSION DEFINITION ---
-$scriptVersion = "2026.06.28__15.22.44"
+$scriptVersion = "2026.07.02__14.27.13"
 
 if ($PSVersionTable.PSVersion -lt [version]"7.6.0") {
     Write-Host "ERROR: Running on version $($PSVersionTable.PSVersion). This script requires at least 7.6.0." -ForegroundColor DarkRed
